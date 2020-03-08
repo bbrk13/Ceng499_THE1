@@ -19,6 +19,7 @@ np.asarray(labels, dtype=np.float128)
 X = data
 y = labels
 print("shape of X", X.shape)
+print("first row of data = ", data[0])
 
 
 
