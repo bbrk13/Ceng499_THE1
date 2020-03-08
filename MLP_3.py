@@ -45,15 +45,17 @@ class MLP(object):
         # save the activations for backpropogation
         self.activations[0] = activations
 
-
-
         # iterate through the network layers
         for i, w in enumerate(self.weights):
+            # print("i: {} w:{}".format(i, w))
             # calculate matrix multiplication between previous activation and weight matrix
             net_inputs = np.dot(activations, w)
 
             # apply sigmoid activation function
-            activations = self._sigmoid(net_inputs)
+            if i == 1:
+                activations = self._sigmoid(net_inputs)
+            if i == 0:
+                activations = self.activation_for_hidden_layer(net_inputs)
 
             # save the activations for backpropogation
             self.activations[i + 1] = activations
@@ -61,15 +63,36 @@ class MLP(object):
         # return output layer activation
         return activations
 
+
+    def activation_for_hidden_layer(self, X):
+        X = np.where(np.absolute(X) < 1.0, (X / 2.0) + 0.5, X)
+        X = np.where(X <= -1.0, 0.0, X)
+        X = np.where(X >= 1.0, 1.0, X)
+        # print("X: ", X)
+        return X
+
+    def derivative_activation_for_hidden_layer(self, X):
+        X = np.where(np.absolute(X) < 1.0, 0.5, X)
+        X = np.where(X <= -1.0, 0, X)
+        X = np.where(X >= 1.0, 0, X)
+        # print("derv. X ", X)
+        return X
+
+
+
     def back_propagate(self, error):
 
         # iterate backwards through the network layers
         for i in reversed(range(len(self.derivatives))):
+            # print("i: {} self.activations[{}] self.activations+1[{}]".format(i, self.activations[i], self.activations[i+1]))
             # get activation for previous layer
             activations = self.activations[i + 1]
 
             # apply sigmoid derivative function
-            delta = error * self._sigmoid_derivative(activations)
+            if i == 1 :
+                delta = error * self._sigmoid_derivative(activations)
+            if i == 0 :
+                delta = error * self.derivative_activation_for_hidden_layer(activations)
 
             # reshape delta as to have it as a 2d array
             delta_re = delta.reshape(delta.shape[0], -1).T
@@ -145,5 +168,4 @@ if __name__ == "__main__":
     mlp = MLP(2, [2], 1)
 
     # train network
-    mlp.train(data_re, labels_re, 100, 0.1)
-
+    mlp.train(data_re, labels_re, 1000, 1)
