@@ -1,129 +1,230 @@
 import numpy as np
-import pickle, gzip
-from scipy.special import expit
+import gzip, pickle
+import sys
 
 
-class ANN:
+class MLP(object):
 
-    def __init__(self):
+    def __init__(self, num_inputs=2, hidden_layers=[2], num_outputs=1):
+
         np.random.seed(1234)
-        with gzip.open("data1_test.pickle.gz") as f:
-            self.data, self.labels = pickle.load(f, encoding='latin1')
-        np.asarray(self.data, dtype=float)
-        np.asarray(self.labels, dtype=float)
-        print("shape of data", self.data.shape)
-        print("first row of data = ", self.data[0][0][0])
-        print("shape of labels", self.labels.shape)
-        self.ni = self.data.shape[1]
-        self.no = 1
-        self.nh = self.calculate_number_of_hidden_nodes(self.ni, self.no)
 
-        self.w1 = np.random.randn(self.data.shape[1], self.nh) * 0.01  # 2x2 matrix
-        self.w2 = np.random.randn(self.nh, 1) * 0.01  # 2x1 matrix
+        self.num_inputs = num_inputs
+        self.hidden_layers = hidden_layers
+        self.num_outputs = num_outputs
 
-        self.b1 = np.zeros((self.ni, self.nh))
-        self.b2 = np.zeros((self.nh, self.no))
+        # create a generic representation of the layers
+        layers = [num_inputs] + hidden_layers + [num_outputs]
 
-    def activation_for_output(self, x):
-        # return 1 / (1 + np.exp(-x))
-        return expit(-x)
+        # create random connection weights for the layers
+        weights = []
+        for i in range(len(layers) - 1):
+            w = np.random.rand(layers[i], layers[i + 1])
+            weights.append(w)
+        self.weights = weights
 
-    def elementwise_mult(self, matrix1, matrix2):
-        len1 = len(matrix1)
-        len2 = len(matrix1[0])
-        result = np.array([], dtype=float)
-        for index1 in range(len1):
-            row = np.array([], dtype=float)
-            for index2 in range(len2):
-                tmp = matrix1[index1][index2] * matrix2[index1][index2]
-                row = np.append(row, tmp)
-            result = np.append(result, row, axis=0)
-        return result
+        # save derivatives per layer
+        derivatives = []
+        for i in range(len(layers) - 1):
+            d = np.zeros((layers[i], layers[i + 1]))
+            derivatives.append(d)
+        self.derivatives = derivatives
+
+        # save activations per layer
+        activations = []
+        for i in range(len(layers)):
+            a = np.zeros(layers[i])
+            activations.append(a)
+        self.activations = activations
+
+    def forward_propagate(self, inputs):
+
+        # the input layer activation is just the input itself
+        activations = inputs
+
+        # save the activations for backpropogation
+        self.activations[0] = activations
+
+        # iterate through the network layers
+        for i, w in enumerate(self.weights):
+            # print("i: {} w:{}".format(i, w))
+            # calculate matrix multiplication between previous activation and weight matrix
+            net_inputs = np.dot(activations, w)
+
+            # apply sigmoid activation function
+            # activations = self._sigmoid(net_inputs)
+
+            if i == 1:
+                activations = self._sigmoid(net_inputs)
+            if i == 0:
+                activations = self.activation_for_hidden_layer(net_inputs)
+
+            # save the activations for backpropogation
+            self.activations[i + 1] = activations
+
+        # return output layer activation
+        return activations
 
 
+    def activation_for_hidden_layer(self, X):
+        # print("activation_for_hidden_layer X: ", X)
 
-    def derv_sigmoid(self, x):
-        # fx = self.activation_for_output(x)
-        # return fx * (1 - fx)
-        # print("derv_sigmoid => shape of x =", x.shape)
-        # return np.multiply(x, (1 - x))
-        # return np.multiply(x, x)
-        return self.elementwise_mult(x, (1-x))
-
-    def activation_for_hidden_layers(self, X):
-        '''result = []
-        for x in X:
-            if x <= -1:
-                result.append(0.0)
-            elif -1 < x < 1:
-                result.append((x / 2) + 0.5)
-            elif x >= 1:
-                result.append(1.0)
-        return result
+        X = np.where(np.absolute(X) < 1.0, (X / 2.0) + 0.5, X)
+        X = np.where(X <= -1.0, 0.0, X)
+        X = np.where(X >= 1.0, 1.0, X)
         '''
-        np.where(X <= -1, 0.0, X)
-        np.where(X >= 1, 1.0, X)
-        np.where(np.absolute(X) < 1, (X / 2) + 0.5, X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                if -1.0 < X.item(i, j) < 1.0:
+                    X[i][j] = X.item(i, j) / 2.0 + 0.5
+                elif X.item(i, j) <= -1.0 :
+                    X[i][j] = 0.0
+                elif X.item(i, j) >= 1.0 :
+                    X[i][j] = 1.0
+        return X
+        '''
+
+        # print("after activation X: ", X)
         return X
 
-    def loss_function(self, number_of_training_examples, training_outputs, calculated_outputs):
-        result = 0.0
-        for i in number_of_training_examples:
-            result = (training_outputs[i] - calculated_outputs[i]) ** 2
-        result = result / number_of_training_examples
-        return result
-
-    def calculate_number_of_hidden_nodes(self, ni, no):
-        nh = np.floor((ni + no) / 2 + 1)
-        return int(nh)
-
-    def feedForward(self, X):
-        self.l1 = np.dot(X, self.w1)  # multiplying with first weight
-        # print(self.l1)
-        self.l2 = self.activation_for_hidden_layers(self.l1)  # activation function of hidden layer
-        self.l3 = np.dot(self.l2, self.w2)  # multiplying with second weights
-        result = self.activation_for_output(self.l3)
-        return result
-
-    def backPropagation(self, X, y, output):
-        # self.error_sum = y - output
-        self.error_sum = np.subtract(y, output.T)
-        self.error_sum = self.error_sum.T
-        # print("shape of y", y.shape)
-        # print("shape of output", output.shape)
-        # delta_re = delta.reshape(delta.shape[0], -1).T
-        # self.error_sum = self.error_sum.reshape(self.error_sum[0], -1)
-        print("shape of error_sum", self.error_sum.shape)
-        print("error_sum", self.error_sum)
-        print("shape of derv_sigmoid output", self.derv_sigmoid(output).shape)
-        print("derv_sigmoid_output", self.derv_sigmoid(output))
-        self.delta = self.error_sum * self.derv_sigmoid(output)
-        # self.delta = self.elementwise_mult(self.error_sum, self.derv_sigmoid(output))
-
-        self.l2_error = self.delta.dot(self.w2.T)
-        self.l2_delta = self.l2_error * self.derv_sigmoid(self.l2)
-
-        self.w1 += X.T.dot(self.l2_delta)
-        self.w2 += self.l2.T.dot(self.delta)
-
-    def train(self, X, y):
-        output = self.feedForward(X)
-        self.backPropagation(X, y, output)
+    def derivative_activation_for_hidden_layer(self, X):
+        # print("derivative_activation_for_hidden_layer X: ", X)
+        X = np.where(np.absolute(X) < 1.0, 0.5, X)
+        X = np.where(X <= -1.0, 0, X)
+        X = np.where(X >= 1.0, 0, X)
+        # print("derv. X ", X)
+        return X
 
 
-if __name__ == '__main__':
-    my_ann = ANN()
-    m1 = [
-        [1, 2],
-        [3, 4]
-    ]
-    m2 = [
-        [5, 6],
-        [7, 8]
-    ]
-    print(my_ann.elementwise_mult(m1, m2))
-    for i in range(1000):
-        if i % 100 == 0:
-            print("Loss: " + str(np.mean(np.square(my_ann.labels - my_ann.feedForward(my_ann.data)))))
-        my_ann.train(my_ann.data, my_ann.labels)
-    # print("predicted output: " + str(my_ann.feedForward(my_ann.data)))
+
+    def back_propagate(self, error):
+
+        # iterate backwards through the network layers
+        for i in reversed(range(len(self.derivatives))):
+            # print("i: {} self.activations[{}] self.activations+1[{}]".format(i, self.activations[i], self.activations[i+1]))
+            # get activation for previous layer
+            activations = self.activations[i + 1]
+
+            # apply sigmoid derivative function
+            # delta = error * self._sigmoid_derivative(activations)
+
+            if i == 1 :
+                delta = error * self._sigmoid_derivative(activations)
+            if i == 0 :
+                delta = error * self.derivative_activation_for_hidden_layer(activations)
+
+            # reshape delta as to have it as a 2d array
+            delta_re = delta.reshape(delta.shape[0], -1).T
+
+            # get activations for current layer
+            current_activations = self.activations[i]
+
+            # reshape activations as to have them as a 2d column matrix
+            current_activations = current_activations.reshape(current_activations.shape[0], -1)
+
+            # save derivative after applying matrix multiplication
+            self.derivatives[i] = np.dot(current_activations, delta_re)
+
+            # backpropogate the next error
+            error = np.dot(delta, self.weights[i].T)
+
+    def train(self, inputs, targets, epochs, learning_rate):
+        # now enter the training loop
+        for i in range(epochs):
+            sum_errors = 0
+
+            # iterate through all the training data
+            for j, input in enumerate(inputs):
+                target = targets[j]
+
+                # activate the network!
+                output = self.forward_propagate(input)
+
+                error = target - output
+
+                self.back_propagate(error)
+
+                # now perform gradient descent on the derivatives
+                # (this will update the weights
+                self.gradient_descent(learning_rate)
+
+                # keep track of the MSE for reporting later
+                sum_errors += self._mse(target, output)
+
+            # Epoch complete, report the training error
+            # print("Error: {} at epoch {}".format(sum_errors / len(inputs), i + 1))
+
+        # print("Training complete!")
+        # print("=====")
+
+    def gradient_descent(self, learningRate=1):
+        # update the weights by stepping down the gradient
+        for i in range(len(self.weights)):
+            weights = self.weights[i]
+            derivatives = self.derivatives[i]
+            weights += derivatives * learningRate
+
+    def _sigmoid(self, x):
+        y = 1.0 / (1 + np.exp(-x))
+        return y
+
+    def _sigmoid_derivative(self, x):
+        return x * (1.0 - x)
+
+    def _mse(self, target, output):
+        return np.average((target - output) ** 2)
+
+    def calculate_accuracy(self, data_test, labels_test):
+        number_of_test_instances = len(labels_test)
+        number_of_correct_classfies = 0
+        for j, input in enumerate(data_test):
+            target = labels_test[j]
+
+            # activate the network!
+            output = self.forward_propagate(input)
+            if output >= 0.5:
+                output = 1
+            else:
+                output = 0
+            error = target - output
+            if error == 0:
+                number_of_correct_classfies += 1
+        accuracy = number_of_correct_classfies / number_of_test_instances
+        # print("number of test instances: ", number_of_test_instances)
+        # print("number of correct classfies: ", number_of_correct_classfies)
+        print(accuracy)
+
+
+# if __name__ == "__main__":
+
+train_data_path = sys.argv[1]
+test_data_path = sys.argv[2]
+epochs = int(sys.argv[3])
+with gzip.open(train_data_path) as f:
+    data, labels = pickle.load(f, encoding='latin1')
+# create a dataset to train a network for the sum operation
+number_of_instances = labels.shape[0]
+data_re = np.asarray(data, dtype=float)
+labels_re = np.reshape(labels, (number_of_instances, 1))
+labels_re = labels_re * 1.0
+ni = data.shape[1]
+no = 1
+nh = np.floor((ni + no) / 2 + 1)
+nh = int(nh)
+# print(type(nh))
+
+with gzip.open(test_data_path) as f1:
+    test_data, test_labels = pickle.load(f1, encoding='latin1')
+# create a dataset to train a network for the sum operation
+number_of_instances_test = test_labels.shape[0]
+data_re_test = np.asarray(test_data, dtype=float)
+labels_re_test = np.reshape(test_labels, (number_of_instances_test, 1))
+labels_re_test = labels_re_test * 1.0
+
+# create a Multilayer Perceptron with one hidden layer
+mlp = MLP(ni, [nh], no)
+
+# train network
+mlp.train(data_re, labels_re, epochs, 0.2)
+
+mlp.calculate_accuracy(test_data, test_labels)
