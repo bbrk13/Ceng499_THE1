@@ -52,6 +52,8 @@ class MLP(object):
             net_inputs = np.dot(activations, w)
 
             # apply sigmoid activation function
+            # activations = self._sigmoid(net_inputs)
+
             if i == 1:
                 activations = self._sigmoid(net_inputs)
             if i == 0:
@@ -65,13 +67,28 @@ class MLP(object):
 
 
     def activation_for_hidden_layer(self, X):
+        # print("activation_for_hidden_layer X: ", X)
+
         X = np.where(np.absolute(X) < 1.0, (X / 2.0) + 0.5, X)
         X = np.where(X <= -1.0, 0.0, X)
         X = np.where(X >= 1.0, 1.0, X)
-        # print("X: ", X)
+        '''
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                if -1.0 < X.item(i, j) < 1.0:
+                    X[i][j] = X.item(i, j) / 2.0 + 0.5
+                elif X.item(i, j) <= -1.0 :
+                    X[i][j] = 0.0
+                elif X.item(i, j) >= 1.0 :
+                    X[i][j] = 1.0
+        return X
+        '''
+
+        # print("after activation X: ", X)
         return X
 
     def derivative_activation_for_hidden_layer(self, X):
+        # print("derivative_activation_for_hidden_layer X: ", X)
         X = np.where(np.absolute(X) < 1.0, 0.5, X)
         X = np.where(X <= -1.0, 0, X)
         X = np.where(X >= 1.0, 0, X)
@@ -89,6 +106,8 @@ class MLP(object):
             activations = self.activations[i + 1]
 
             # apply sigmoid derivative function
+            # delta = error * self._sigmoid_derivative(activations)
+
             if i == 1 :
                 delta = error * self._sigmoid_derivative(activations)
             if i == 0 :
@@ -155,17 +174,57 @@ class MLP(object):
     def _mse(self, target, output):
         return np.average((target - output) ** 2)
 
+    def calculate_accuracy(self, data_test, labels_test):
+        number_of_test_instances = len(labels_test)
+        number_of_correct_classfies = 0
+        for j, input in enumerate(data_test):
+            target = labels_test[j]
 
-if __name__ == "__main__":
-    with gzip.open("data1_test.pickle.gz") as f:
-        data, labels = pickle.load(f, encoding='latin1')
-    # create a dataset to train a network for the sum operation
-    data_re = np.asarray(data, dtype=float)
-    labels_re = np.reshape(labels, (200, 1))
-    labels_re = labels_re * 1.0
+            # activate the network!
+            output = self.forward_propagate(input)
+            if output >= 0.5:
+                output = 1
+            else:
+                output = 0
+            error = target - output
+            if error == 0:
+                number_of_correct_classfies += 1
+        accuracy = number_of_correct_classfies / number_of_test_instances
+        print("number of test instances: ", number_of_test_instances)
+        print("number of correct classfies: ", number_of_correct_classfies)
+        print("accuracy: ", accuracy)
 
-    # create a Multilayer Perceptron with one hidden layer
-    mlp = MLP(2, [2], 1)
 
-    # train network
-    mlp.train(data_re, labels_re, 1000, 1)
+# if __name__ == "__main__":
+
+train_data_path = sys.argv[1]
+test_data_path = sys.argv[2]
+epochs = int(sys.argv[3])
+with gzip.open(train_data_path) as f:
+    data, labels = pickle.load(f, encoding='latin1')
+# create a dataset to train a network for the sum operation
+number_of_instances = labels.shape[0]
+data_re = np.asarray(data, dtype=float)
+labels_re = np.reshape(labels, (number_of_instances, 1))
+labels_re = labels_re * 1.0
+ni = data.shape[1]
+no = 1
+nh = np.floor((ni + no) / 2 + 1)
+nh = int(nh)
+print(type(nh))
+
+with gzip.open(test_data_path) as f1:
+    test_data, test_labels = pickle.load(f1, encoding='latin1')
+# create a dataset to train a network for the sum operation
+number_of_instances_test = test_labels.shape[0]
+data_re_test = np.asarray(test_data, dtype=float)
+labels_re_test = np.reshape(test_labels, (number_of_instances_test, 1))
+labels_re_test = labels_re_test * 1.0
+
+# create a Multilayer Perceptron with one hidden layer
+mlp = MLP(ni, [nh], no)
+
+# train network
+mlp.train(data_re, labels_re, epochs, 0.2)
+
+mlp.calculate_accuracy(test_data, test_labels)
