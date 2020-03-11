@@ -24,15 +24,15 @@ train_dataset = torch.utils.data.DataLoader(train_set, batch_size=1, shuffle=Fal
 
 
 class MyModel(torch.nn.Module):
-    num_features = 96 * 32 * 1
+    num_features = 32 * 32 * 3
     num_categories = 10
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(MyModel.num_features, 500)
-        self.fc2 = nn.Linear(500, 200)
-        self.fc3 = nn.Linear(200, MyModel.num_categories)
+        self.fc1 = nn.Linear(MyModel.num_features, 100)
+        self.fc2 = nn.Linear(100, 100)
+        self.fc3 = nn.Linear(100, MyModel.num_categories)
 
-        self.optimizer = optim.SGD(self.parameters(), lr=0.01)
+        self.optimizer = optim.SGD(self.parameters(), lr=0.001)
         self.criterion = torch.nn.MSELoss()
         # self.loss = 0.0
 
@@ -60,7 +60,7 @@ model = MyModel().to(device)
 my_loss = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=0.001)
 
-num_epochs = 3
+num_epochs = 200
 for epoch in range(num_epochs):
   sum_loss = 0
   for i, (images, labels) in enumerate(train_dataset):
